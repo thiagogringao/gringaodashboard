@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        pre {
+            background: #f4f4f4;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Teste de Conexão com API</h1>
+
+    <div>
+        <button onclick="testHealth()">Testar Health Check</button>
+        <button onclick="testEcommerce()">Testar E-commerce</button>
+        <button onclick="testLojaFisica()">Testar Loja Física</button>
+    </div>
+
+    <div id="result"></div>
+
+    <script>
+        const API_URL = 'http://localhost:3001';
+        const resultDiv = document.getElementById('result');
+
+        async function testHealth() {
+            resultDiv.innerHTML = '<p>Testando...</p>';
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <h2 class="success">✅ Health Check OK</h2>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <h2 class="error">❌ Erro no Health Check</h2>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+
+        async function testEcommerce() {
+            resultDiv.innerHTML = '<p>Testando...</p>';
+            try {
+                const response = await fetch(`${API_URL}/api/produtos/ecommerce?limit=5`);
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <h2 class="success">✅ API E-commerce OK</h2>
+                    <p>Total de produtos: ${data.pagination?.total || 0}</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <h2 class="error">❌ Erro na API E-commerce</h2>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+
+        async function testLojaFisica() {
+            resultDiv.innerHTML = '<p>Testando...</p>';
+            try {
+                const response = await fetch(`${API_URL}/api/produtos/loja-fisica?limit=5`);
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <h2 class="success">✅ API Loja Física OK</h2>
+                    <p>Total de produtos: ${data.pagination?.total || 0}</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <h2 class="error">❌ Erro na API Loja Física</h2>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

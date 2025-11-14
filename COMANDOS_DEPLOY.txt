@@ -1,0 +1,312 @@
+==============================================
+COMANDOS PARA DEPLOY - DASHBOARD PRODUTOS
+==============================================
+
+VPS: 72.60.250.20
+Usuário: root
+Senha: Admingringao1211.
+
+==============================================
+1. CONECTAR NA VPS
+==============================================
+
+ssh root@72.60.250.20
+
+
+==============================================
+2. SETUP INICIAL (APENAS PRIMEIRA VEZ)
+==============================================
+
+# Atualizar sistema
+apt update && apt upgrade -y
+
+# Instalar Node.js 18.x
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+apt install -y nodejs
+
+# Instalar PM2
+npm install -g pm2
+
+# Instalar Nginx
+apt install -y nginx
+
+# Instalar Git
+apt install -y git
+
+# Criar diretórios
+mkdir -p /var/www/dashboard/{backend,frontend,logs}
+mkdir -p /var/www/dashboard/backend/cache
+mkdir -p /var/backups/dashboard
+
+# Configurar PM2 para iniciar no boot
+pm2 startup systemd -u root --hp /root
+pm2 save
+
+# Configurar Firewall
+apt install -y ufw
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw --force enable
+
+
+==============================================
+3. CONFIGURAR NGINX
+==============================================
+
+# Criar configuração
+cat > /etc/nginx/sites-available/dashboard << 'EOF'
+server {
+    listen 80;
+    server_name 72.60.250.20;
+
+    access_log /var/log/nginx/dashboard-access.log;
+    error_log /var/log/nginx/dashboard-error.log;
+
+    location / {
+        root /var/www/dashboard/frontend/build;
+        try_files $uri $uri/ /index.html;
+        
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/json application/javascript;
+}
+EOF
+
+# Habilitar site
+ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+
+# Testar e reiniciar
+nginx -t
+systemctl restart nginx
+systemctl enable nginx
+
+
+==============================================
+4. TRANSFERIR ARQUIVOS (DO SEU COMPUTADOR)
+==============================================
+
+# No PowerShell do Windows:
+
+# Backend
+scp -r C:\Users\thiag\Desktop\dashboardPRODUTOS\backend root@72.60.250.20:/var/www/dashboard/
+
+# Frontend (após fazer build)
+cd C:\Users\thiag\Desktop\dashboardPRODUTOS\frontend
+npm run build
+scp -r C:\Users\thiag\Desktop\dashboardPRODUTOS\frontend\build root@72.60.250.20:/var/www/dashboard/frontend/
+
+
+==============================================
+5. CONFIGURAR BACKEND (NA VPS)
+==============================================
+
+cd /var/www/dashboard/backend
+
+# Instalar dependências
+npm install --production
+
+# Criar .env
+cat > .env << 'EOF'
+PORT=3001
+DB_HOST_LOJA=localhost
+DB_USER_LOJA=seu_usuario
+DB_PASSWORD_LOJA=sua_senha
+DB_NAME_LOJA=seu_banco
+DB_HOST_ECOMMERCE=localhost
+DB_USER_ECOMMERCE=seu_usuario
+DB_PASSWORD_ECOMMERCE=sua_senha
+DB_NAME_ECOMMERCE=db_gringao
+JWT_SECRET=seu-secret-super-seguro-producao-2024
+CORS_ORIGIN=http://72.60.250.20
+NODE_ENV=production
+EOF
+
+# IMPORTANTE: Editar .env com credenciais corretas
+nano .env
+
+# Proteger .env
+chmod 600 .env
+
+# Criar ecosystem.config.js
+cat > ecosystem.config.js << 'EOF'
+module.exports = {
+  apps: [{
+    name: 'dashboard-backend',
+    script: './server.js',
+    instances: 2,
+    exec_mode: 'cluster',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3001
+    },
+    error_file: '../logs/backend-error.log',
+    out_file: '../logs/backend-out.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    merge_logs: true,
+    autorestart: true,
+    max_memory_restart: '1G',
+    watch: false
+  }]
+};
+EOF
+
+
+==============================================
+6. EXECUTAR BACKUPS INICIAIS
+==============================================
+
+cd /var/www/dashboard/backend
+
+node scripts/backupToSQLite.js
+node scripts/backupEcommerceToSQLite.js
+
+
+==============================================
+7. INICIAR APLICAÇÃO
+==============================================
+
+cd /var/www/dashboard/backend
+
+# Iniciar com PM2
+pm2 start ecosystem.config.js
+
+# Salvar configuração
+pm2 save
+
+# Ver status
+pm2 status
+
+# Ver logs
+pm2 logs dashboard-backend
+
+
+==============================================
+8. VERIFICAR DEPLOY
+==============================================
+
+# Status
+pm2 status
+systemctl status nginx
+
+# Logs
+pm2 logs dashboard-backend --lines 50
+tail -f /var/log/nginx/dashboard-access.log
+
+# Testar API
+curl http://localhost:3001/api/auth/login
+
+# Abrir no navegador
+http://72.60.250.20
+
+
+==============================================
+COMANDOS ÚTEIS
+==============================================
+
+# PM2
+pm2 status                    # Ver status
+pm2 logs dashboard-backend    # Ver logs
+pm2 restart dashboard-backend # Reiniciar
+pm2 stop dashboard-backend    # Parar
+pm2 monit                     # Monitor
+
+# Nginx
+nginx -t                      # Testar config
+systemctl reload nginx        # Recarregar
+systemctl restart nginx       # Reiniciar
+systemctl status nginx        # Status
+
+# Sistema
+df -h                         # Espaço em disco
+free -h                       # Memória
+htop                          # Monitor de processos
+netstat -tlnp | grep 3001     # Ver porta 3001
+
+
+==============================================
+ATUALIZAR APLICAÇÃO
+==============================================
+
+cd /var/www/dashboard/backend
+
+# Parar
+pm2 stop dashboard-backend
+
+# Atualizar código (transferir novos arquivos via SCP)
+
+# Reinstalar dependências (se necessário)
+npm install --production
+
+# Executar backups
+node scripts/backupToSQLite.js
+node scripts/backupEcommerceToSQLite.js
+
+# Reiniciar
+pm2 restart dashboard-backend
+
+# Recarregar Nginx
+systemctl reload nginx
+
+
+==============================================
+TROUBLESHOOTING
+==============================================
+
+# Backend não inicia
+pm2 logs dashboard-backend --lines 100
+cd /var/www/dashboard/backend && node server.js
+
+# Erro de conexão MySQL
+cat /var/www/dashboard/backend/.env
+mysql -h localhost -u usuario -p
+
+# Frontend não carrega
+nginx -t
+tail -f /var/log/nginx/dashboard-error.log
+ls -la /var/www/dashboard/frontend/build
+
+# Porta em uso
+netstat -tlnp | grep 3001
+kill -9 <PID>
+
+
+==============================================
+CREDENCIAIS
+==============================================
+
+URL: http://72.60.250.20
+
+Admin:
+  Email: admin@dashboard.com
+  Senha: admin123
+
+
+==============================================
+FIM
+==============================================
+

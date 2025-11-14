@@ -1,0 +1,139 @@
+═══════════════════════════════════════════════════════════════
+🔧 BUG CORRIGIDO - ATUALIZAR FRONTEND NO SERVIDOR
+═══════════════════════════════════════════════════════════════
+
+O PROBLEMA:
+-----------
+O erro "Converting circular structure to JSON" estava no código do
+frontend (AuthContext.jsx linha 45). A função login estava tentando
+usar variáveis que não existiam no escopo.
+
+A CORREÇÃO:
+-----------
+✅ Arquivo corrigido: frontend/src/contexts/AuthContext.jsx
+✅ Frontend rebuildado com a correção
+✅ Pronto para transferir para o servidor
+
+
+OPÇÃO 1: TRANSFERIR VIA SCP (PowerShell)
+═══════════════════════════════════════════════════════════════
+
+# Transferir frontend corrigido
+scp -r .\frontend\dist\* root@72.61.40.170:/var/www/dashboard/frontend/
+
+
+OPÇÃO 2: TRANSFERIR VIA WinSCP
+═══════════════════════════════════════════════════════════════
+
+1. Conectar no WinSCP:
+   Host: 72.61.40.170
+   User: root
+   Password: Admingringao1211.
+
+2. Navegar até: /var/www/dashboard/frontend/
+
+3. DELETAR todos os arquivos antigos do frontend
+
+4. Transferir TODOS os arquivos de:
+   LOCAL: C:\Users\thiag\Desktop\dashboardPRODUTOS\frontend\dist\*
+   SERVIDOR: /var/www/dashboard/frontend/
+
+
+OPÇÃO 3: COMANDO ÚNICO NO SERVIDOR
+═══════════════════════════════════════════════════════════════
+
+Conecte no servidor:
+ssh root@72.61.40.170
+Senha: Admingringao1211.
+
+Cole este comando:
+
+# Limpar frontend antigo e aguardar transferência
+rm -rf /var/www/dashboard/frontend/*
+echo "✅ Frontend antigo removido"
+echo "📤 Agora transfira os novos arquivos de frontend/dist/"
+echo "   para /var/www/dashboard/frontend/"
+
+
+APÓS TRANSFERIR OS ARQUIVOS
+═══════════════════════════════════════════════════════════════
+
+Conecte no servidor e execute:
+
+# Ajustar permissões
+chmod -R 755 /var/www/dashboard/frontend
+
+# Reiniciar Nginx
+systemctl restart nginx
+
+# Verificar status
+systemctl status nginx
+
+# Limpar cache do navegador
+echo "✅ Agora limpe o cache do navegador (Ctrl+Shift+Delete)"
+echo "   ou abra em aba anônima"
+
+
+TESTAR O LOGIN
+═══════════════════════════════════════════════════════════════
+
+1. Acesse: http://72.61.40.170
+
+2. Faça login com:
+   Email: admin@dashboard.com
+   Senha: admin123
+
+3. Se ainda aparecer erro, pressione Ctrl+Shift+R para
+   forçar atualização do cache
+
+
+VERIFICAR SE FUNCIONOU
+═══════════════════════════════════════════════════════════════
+
+# Ver logs do backend
+ssh root@72.61.40.170
+pm2 logs dashboard-backend --lines 20
+
+# Se aparecer erro de banco, execute:
+cd /var/www/dashboard/backend
+node -e "
+const Database = require('better-sqlite3');
+const bcrypt = require('bcryptjs');
+const db = new Database('auth.db');
+db.exec(\`
+  CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    senha TEXT NOT NULL,
+    role TEXT DEFAULT 'user',
+    ativo INTEGER DEFAULT 1,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ultimo_acesso DATETIME
+  )
+\`);
+const admin = db.prepare('SELECT * FROM usuarios WHERE email = ?').get('admin@dashboard.com');
+if (!admin) {
+    const senhaHash = bcrypt.hashSync('admin123', 10);
+    db.prepare(\`INSERT INTO usuarios (nome, email, senha, role, ativo) VALUES (?, ?, ?, ?, ?)\`)
+        .run('Administrador', 'admin@dashboard.com', senhaHash, 'admin', 1);
+    console.log('✅ Admin criado!');
+} else {
+    console.log('✅ Admin já existe');
+}
+db.close();
+"
+
+
+RESUMO
+═══════════════════════════════════════════════════════════════
+
+1. ✅ Bug corrigido no código
+2. ✅ Frontend rebuildado
+3. 📤 Transferir arquivos do frontend/dist/ para o servidor
+4. 🔄 Reiniciar Nginx
+5. 🧹 Limpar cache do navegador
+6. 🔑 Fazer login: admin@dashboard.com / admin123
+
+
+═══════════════════════════════════════════════════════════════

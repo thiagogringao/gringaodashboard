@@ -1,0 +1,197 @@
+═══════════════════════════════════════════════════════════════
+🔧 COMANDOS PARA CORRIGIR PROBLEMA DE LOGIN
+═══════════════════════════════════════════════════════════════
+
+CONECTE NO SERVIDOR:
+ssh root@72.61.40.170
+Senha: Admingringao1211.
+
+
+OPÇÃO 1: EXECUTAR SCRIPT DE CORREÇÃO AUTOMÁTICA
+═══════════════════════════════════════════════════════════════
+
+Cole TODO este bloco:
+
+cat > /root/corrigir_login.sh << 'EOFSCRIPT'
+#!/bin/bash
+cd /var/www/dashboard/backend
+
+echo "🔧 CORRIGINDO LOGIN..."
+
+# Verificar e criar banco se necessário
+node -e "
+const Database = require('better-sqlite3');
+const bcrypt = require('bcryptjs');
+
+let db;
+try {
+    db = new Database('auth.db');
+    
+    // Criar tabela se não existir
+    db.exec(\`
+      CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        senha TEXT NOT NULL,
+        role TEXT DEFAULT 'user',
+        ativo INTEGER DEFAULT 1,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        ultimo_acesso DATETIME
+      )
+    \`);
+    
+    // Verificar se admin existe
+    const admin = db.prepare('SELECT * FROM usuarios WHERE email = ?').get('admin@dashboard.com');
+    
+    if (!admin) {
+        console.log('📝 Criando usuário admin...');
+        const senhaHash = bcrypt.hashSync('admin123', 10);
+        db.prepare(\`
+            INSERT INTO usuarios (nome, email, senha, role, ativo)
+            VALUES (?, ?, ?, ?, ?)
+        \`).run('Administrador', 'admin@dashboard.com', senhaHash, 'admin', 1);
+        console.log('✅ Admin criado!');
+    } else {
+        console.log('✅ Admin já existe');
+        // Atualizar senha do admin para garantir
+        const senhaHash = bcrypt.hashSync('admin123', 10);
+        db.prepare('UPDATE usuarios SET senha = ? WHERE email = ?').run(senhaHash, 'admin@dashboard.com');
+        console.log('✅ Senha do admin atualizada!');
+    }
+    
+    // Listar usuários
+    const usuarios = db.prepare('SELECT id, nome, email, role FROM usuarios').all();
+    console.log('');
+    console.log('Usuários cadastrados:');
+    usuarios.forEach(u => {
+        console.log(\`  - \${u.nome} (\${u.email}) - Role: \${u.role}\`);
+    });
+    
+    db.close();
+} catch (error) {
+    console.error('❌ Erro:', error.message);
+    if (db) db.close();
+}
+"
+
+# Testar login
+echo ""
+echo "🔍 Testando login..."
+curl -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@dashboard.com","senha":"admin123"}' \
+  -s | jq '.' || echo "Resposta recebida"
+
+# Reiniciar aplicação
+echo ""
+echo "🔄 Reiniciando aplicação..."
+pm2 restart dashboard-backend
+
+echo ""
+echo "✅ CORREÇÃO CONCLUÍDA!"
+echo ""
+echo "🔑 CREDENCIAIS:"
+echo "Email: admin@dashboard.com"
+echo "Senha: admin123"
+echo ""
+EOFSCRIPT
+
+chmod +x /root/corrigir_login.sh
+bash /root/corrigir_login.sh
+
+
+OPÇÃO 2: COMANDOS MANUAIS PASSO A PASSO
+═══════════════════════════════════════════════════════════════
+
+# 1. Ir para o diretório do backend
+cd /var/www/dashboard/backend
+
+# 2. Ver logs do backend
+pm2 logs dashboard-backend --lines 30
+
+# 3. Verificar se o banco existe
+ls -la auth.db
+
+# 4. Criar/verificar usuário admin
+node -e "
+const Database = require('better-sqlite3');
+const bcrypt = require('bcryptjs');
+
+const db = new Database('auth.db');
+
+db.exec(\`
+  CREATE TABLE IF NOT EXISTS usuarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    senha TEXT NOT NULL,
+    role TEXT DEFAULT 'user',
+    ativo INTEGER DEFAULT 1,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ultimo_acesso DATETIME
+  )
+\`);
+
+const admin = db.prepare('SELECT * FROM usuarios WHERE email = ?').get('admin@dashboard.com');
+
+if (!admin) {
+    const senhaHash = bcrypt.hashSync('admin123', 10);
+    db.prepare(\`
+        INSERT INTO usuarios (nome, email, senha, role, ativo)
+        VALUES (?, ?, ?, ?, ?)
+    \`).run('Administrador', 'admin@dashboard.com', senhaHash, 'admin', 1);
+    console.log('✅ Admin criado!');
+} else {
+    console.log('✅ Admin já existe');
+}
+
+const usuarios = db.prepare('SELECT id, nome, email, role FROM usuarios').all();
+console.log('Usuários:', usuarios);
+
+db.close();
+"
+
+# 5. Testar endpoint de login
+curl -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@dashboard.com","senha":"admin123"}'
+
+# 6. Reiniciar aplicação
+pm2 restart dashboard-backend
+
+# 7. Ver status
+pm2 status
+
+
+OPÇÃO 3: VERIFICAR LOGS E DIAGNOSTICAR
+═══════════════════════════════════════════════════════════════
+
+# Ver logs em tempo real
+pm2 logs dashboard-backend
+
+# Ver últimas 50 linhas
+pm2 logs dashboard-backend --lines 50
+
+# Ver apenas erros
+pm2 logs dashboard-backend --err
+
+# Testar se o backend está respondendo
+curl http://localhost:3001/health
+
+# Ver logs do Nginx
+tail -f /var/log/nginx/dashboard-error.log
+
+
+CREDENCIAIS PARA TESTE
+═══════════════════════════════════════════════════════════════
+Email: admin@dashboard.com
+Senha: admin123
+
+
+APÓS EXECUTAR, TENTE FAZER LOGIN NOVAMENTE EM:
+═══════════════════════════════════════════════════════════════
+http://72.61.40.170
+
+
+═══════════════════════════════════════════════════════════════

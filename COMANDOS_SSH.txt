@@ -1,0 +1,193 @@
+# ========================================
+# COMANDOS PARA EXECUTAR NO SERVIDOR SSH
+# ========================================
+# Conecte: ssh root@72.60.250.20
+# Senha: Admingringao1211.
+# ========================================
+
+# PASSO 1: VERIFICAR O QUE JÁ FOI TRANSFERIDO
+# ============================================
+ls -la /var/www/dashboard/backend/
+ls -la /var/www/dashboard/frontend/
+
+# PASSO 2: ATUALIZAR SISTEMA E INSTALAR DEPENDÊNCIAS
+# ===================================================
+apt update && apt upgrade -y
+
+# Instalar Node.js 18.x
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+apt install -y nodejs
+
+# Verificar instalação
+node --version
+npm --version
+
+# Instalar PM2
+npm install -g pm2
+
+# Instalar Nginx
+apt install -y nginx
+
+# Instalar UFW (firewall)
+apt install -y ufw
+
+# PASSO 3: CRIAR ESTRUTURA DE DIRETÓRIOS
+# =======================================
+mkdir -p /var/www/dashboard/backend/cache
+mkdir -p /var/www/dashboard/frontend
+mkdir -p /var/www/dashboard/logs
+mkdir -p /var/backups/dashboard
+
+# PASSO 4: INSTALAR DEPENDÊNCIAS DO BACKEND
+# ==========================================
+cd /var/www/dashboard/backend
+npm install --production
+
+# PASSO 5: AJUSTAR PERMISSÕES
+# ============================
+chmod 600 /var/www/dashboard/backend/.env
+chmod 755 /var/www/dashboard/backend/server.js
+
+# PASSO 6: CRIAR CONFIGURAÇÃO DO PM2
+# ===================================
+cd /var/www/dashboard/backend
+
+cat > ecosystem.config.js << 'EOF'
+module.exports = {
+  apps: [{
+    name: 'dashboard-backend',
+    script: './server.js',
+    instances: 2,
+    exec_mode: 'cluster',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 3001
+    },
+    error_file: '../logs/backend-error.log',
+    out_file: '../logs/backend-out.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss',
+    merge_logs: true,
+    autorestart: true,
+    max_memory_restart: '1G',
+    watch: false
+  }]
+};
+EOF
+
+# PASSO 7: INICIAR APLICAÇÃO COM PM2
+# ===================================
+pm2 delete dashboard-backend 2>/dev/null || true
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup
+
+# IMPORTANTE: Copie e execute o comando que aparecer após "pm2 startup"
+
+# PASSO 8: VERIFICAR STATUS
+# ==========================
+pm2 status
+pm2 logs dashboard-backend --lines 20
+
+# PASSO 9: CONFIGURAR NGINX
+# ==========================
+cat > /etc/nginx/sites-available/dashboard << 'EOF'
+server {
+    listen 80;
+    server_name 72.60.250.20;
+
+    access_log /var/log/nginx/dashboard-access.log;
+    error_log /var/log/nginx/dashboard-error.log;
+
+    location / {
+        root /var/www/dashboard/frontend;
+        try_files $uri $uri/ /index.html;
+        
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    location /api/ {
+        proxy_pass http://localhost:3001/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+        
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/json application/javascript;
+}
+EOF
+
+# PASSO 10: ATIVAR SITE NO NGINX
+# ===============================
+ln -sf /etc/nginx/sites-available/dashboard /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+
+# Testar configuração
+nginx -t
+
+# Reiniciar Nginx
+systemctl restart nginx
+systemctl enable nginx
+
+# PASSO 11: CONFIGURAR FIREWALL
+# ==============================
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+ufw --force enable
+
+# Verificar status
+ufw status
+
+# PASSO 12: VERIFICAR TUDO
+# =========================
+echo "========================================="
+echo "VERIFICAÇÃO FINAL"
+echo "========================================="
+
+# Status do PM2
+echo ""
+echo "Status do PM2:"
+pm2 status
+
+# Status do Nginx
+echo ""
+echo "Status do Nginx:"
+systemctl status nginx --no-pager | head -n 5
+
+# Testar backend
+echo ""
+echo "Testando backend:"
+curl http://localhost:3001/health
+
+# Ver últimos logs
+echo ""
+echo "Últimos logs:"
+pm2 logs dashboard-backend --lines 10 --nostream
+
+echo ""
+echo "========================================="
+echo "✅ DEPLOY CONCLUÍDO!"
+echo "========================================="
+echo ""
+echo "🌐 Acesse: http://72.60.250.20"
+echo ""
+echo "📊 Comandos úteis:"
+echo "  - Ver logs: pm2 logs dashboard-backend"
+echo "  - Ver status: pm2 status"
+echo "  - Reiniciar: pm2 restart dashboard-backend"
+echo ""
