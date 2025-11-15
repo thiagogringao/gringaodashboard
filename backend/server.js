@@ -80,7 +80,7 @@ app.get('/api/backup/status', async (req, res) => {
 });
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/api/health', (req, res) =\u003e {
   res.json({ status: 'ok', message: 'Servidor rodando' });
 });
 
