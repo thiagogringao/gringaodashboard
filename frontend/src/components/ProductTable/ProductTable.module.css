@@ -184,6 +184,16 @@
   white-space: nowrap;
 }
 
+.categoria {
+  font-size: 13px;
+  color: #004B87;
+  font-weight: 600;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .estoque {
   text-align: center;
   font-weight: 600;
@@ -326,20 +336,19 @@
   font-size: 10px;
 }
 
-.mesPico {
-  text-align: center;
+.lucro {
+  text-align: right;
+  font-weight: 600;
 }
 
-.mesPicoBadge {
-  display: inline-block;
-  padding: 4px 10px;
-  background: linear-gradient(135deg, #004B87 0%, #003d6e 100%);
-  color: white;
-  border-radius: 12px;
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+.lucroPositivo {
+  color: #27ae60;
+  font-weight: 700;
+}
+
+.lucroNegativo {
+  color: #e74c3c;
+  font-weight: 700;
 }
 
 .thActions,

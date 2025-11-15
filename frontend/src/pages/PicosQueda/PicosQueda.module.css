@@ -233,10 +233,34 @@
   line-height: 1.5;
 }
 
+.codigoComImagem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.miniatura {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid #e0e0e0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: white;
+}
+
+.miniatura:hover {
+  border-color: #FFD700;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+}
+
 .codigo {
   font-family: 'Courier New', monospace;
   font-weight: 600;
   color: #004B87;
+  white-space: nowrap;
 }
 
 .badge {

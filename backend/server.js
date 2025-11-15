@@ -5,6 +5,7 @@ require('dotenv').config();
 const produtosRoutes = require('./routes/produtos');
 const authRoutes = require('./routes/auth');
 const backupRoutes = require('./routes/backup');
+const filtrosRoutes = require('./routes/filtros');
 const errorHandler = require('./middleware/errorHandler');
 const backupScheduler = require('./jobs/backupScheduler');
 const backupService = require('./services/backupService');
@@ -17,7 +18,14 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  origin: function (origin, callback) {
+    // Permitir requisições sem origin (como Postman) ou de localhost/127.0.0.1
+    if (!origin || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+      callback(null, true);
+    } else {
+      callback(null, origin); // Permitir qualquer origem em desenvolvimento
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
@@ -34,6 +42,7 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/produtos', produtosRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/filtros', filtrosRoutes);
 
 // Rota para executar backup manual
 app.post('/api/backup/run', async (req, res) => {
@@ -80,16 +89,29 @@ app.use(errorHandler);
 
 // Iniciar servidor
 app.listen(PORT, async () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
-  console.log(`Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`\n========================================`);
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+  console.log(`📍 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`========================================\n`);
   
   // Inicializar backup service
   await backupService.initialize();
   
-  // Executar backup inicial
-  if (process.env.RUN_INITIAL_BACKUP === 'true') {
-    console.log('Executando backup inicial...');
-    await backupService.runFullBackup();
+  // Executar backup incremental no primeiro acesso (SEMPRE)
+  console.log('🔄 Verificando necessidade de backup...');
+  try {
+    const needsBackup = await backupService.needsBackup();
+    
+    if (needsBackup) {
+      console.log('📦 Cache SQLite precisa ser atualizado');
+      console.log('⚠️ Execute: npm run backup (ou use fix-backend.bat)');
+      console.log('⚠️ Aplicação continuará, mas pode ter dados desatualizados\n');
+    } else {
+      console.log('✅ Cache SQLite atualizado, backup não necessário\n');
+    }
+  } catch (error) {
+    console.error('⚠️ Erro ao verificar cache:', error.message);
+    console.log('⚠️ Execute o backup manualmente se necessário\n');
   }
   
   // Iniciar agendador de backups

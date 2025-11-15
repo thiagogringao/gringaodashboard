@@ -73,6 +73,9 @@ const ProductTable = memo(({ produtos, tipo, onSort, sortConfig }) => {
             </th>
             {isEcommerce && (
               <>
+                <th className={styles.sortable} onClick={() => handleSort('categoria')}>
+                  Categoria {getSortIcon('categoria')}
+                </th>
                 <th className={styles.sortable} onClick={() => handleSort('preco')}>
                   Preço Venda {getSortIcon('preco')}
                 </th>
@@ -86,6 +89,9 @@ const ProductTable = memo(({ produtos, tipo, onSort, sortConfig }) => {
                 <th className={styles.sortable} onClick={() => handleSort('fornecedor')}>
                   Fornecedor {getSortIcon('fornecedor')}
                 </th>
+                <th className={styles.sortable} onClick={() => handleSort('categoria')}>
+                  Categoria {getSortIcon('categoria')}
+                </th>
                 <th className={styles.sortable} onClick={() => handleSort('precoVenda')}>
                   Preço Venda {getSortIcon('precoVenda')}
                 </th>
@@ -97,8 +103,8 @@ const ProductTable = memo(({ produtos, tipo, onSort, sortConfig }) => {
             <th className={styles.sortable} onClick={() => handleSort('estoqueMinimo')}>
               Estoque Mín. {getSortIcon('estoqueMinimo')}
             </th>
-            <th className={styles.sortable} onClick={() => handleSort('mesPico')}>
-              Mês Pico {getSortIcon('mesPico')}
+            <th className={styles.sortable} onClick={() => handleSort('lucro')}>
+              Lucro {getSortIcon('lucro')}
             </th>
             <th className={styles.thActions}>Ações</th>
           </tr>
@@ -135,6 +141,9 @@ const ProductTable = memo(({ produtos, tipo, onSort, sortConfig }) => {
               </td>
               {isEcommerce && (
                 <>
+                  <td className={styles.categoria}>
+                    {produto.categoria || '-'}
+                  </td>
                   <td className={styles.preco}>
                     {formatarMoeda(produto.preco || 0)}
                   </td>
@@ -147,6 +156,9 @@ const ProductTable = memo(({ produtos, tipo, onSort, sortConfig }) => {
                 <>
                   <td className={styles.fornecedor}>
                     {produto.fornecedor || '-'}
+                  </td>
+                  <td className={styles.categoria}>
+                    {produto.categoria || '-'}
                   </td>
                   <td className={styles.preco}>
                     <div 
@@ -221,9 +233,11 @@ const ProductTable = memo(({ produtos, tipo, onSort, sortConfig }) => {
                   '-'
                 )}
               </td>
-              <td className={styles.mesPico}>
-                {produto.mesPico ? (
-                  <span className={styles.mesPicoBadge}>{produto.mesPico}</span>
+              <td className={styles.lucro}>
+                {produto.lucro !== undefined && produto.lucro !== null ? (
+                  <span className={produto.lucro >= 0 ? styles.lucroPositivo : styles.lucroNegativo}>
+                    {formatarMoeda(produto.lucro)}
+                  </span>
                 ) : (
                   '-'
                 )}

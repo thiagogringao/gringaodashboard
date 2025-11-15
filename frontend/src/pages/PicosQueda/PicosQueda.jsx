@@ -295,9 +295,16 @@ const PicosQueda = () => {
                   {sortedItems.map((item) => (
                     <tr key={item.codigoInterno}>
                       <td>
-                        <ImageTooltip src={item.imagemBase64} alt={item.descricao}>
+                        <div className={styles.codigoComImagem}>
+                          <ImageTooltip src={item.imagemBase64} alt={item.descricao}>
+                            <img 
+                              src={item.imagemBase64 || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"%3E%3Crect width="40" height="40" fill="%23f5f5f5"/%3E%3Ctext x="20" y="25" text-anchor="middle" font-size="10" fill="%23999"%3E?%3C/text%3E%3C/svg%3E'} 
+                              alt={item.descricao}
+                              className={styles.miniatura}
+                            />
+                          </ImageTooltip>
                           <span className={styles.codigo}>{item.codigoInterno}</span>
-                        </ImageTooltip>
+                        </div>
                       </td>
                       <td>{item.descricao}</td>
                       <td>

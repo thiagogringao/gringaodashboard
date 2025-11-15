@@ -83,13 +83,13 @@ class SQLiteBackupService {
       const insertStmt = cacheDb.prepare(`
         INSERT OR REPLACE INTO produtos (
           codigo_interno, codigo_barras, descricao, descricao_resumida,
-          codigo_fornecedor, estoque, preco_venda, preco_custo, margem, tipo_preco, fornecedor, imagem_base64,
+          codigo_fornecedor, categoria, estoque, preco_venda, preco_custo, margem, tipo_preco, fornecedor, imagem_base64,
           estoque_minimo, mes_pico, media_mensal, total_vendas, vendas_mensais,
           historico_12_meses, analise_preditiva, mes_pico_numero,
           tendencia_percentual, previsao_proximo_mes, risco_ruptura, dias_estoque,
           estoque_ideal_sugerido,
           data_atualizacao
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
 
       // Usar transação para inserir tudo de uma vez (muito mais rápido)
@@ -129,6 +129,7 @@ class SQLiteBackupService {
             produto.descricao,
             produto.descricaoResumida,
             produto.codigoFornecedor,
+            produto.categoria,
             produto.estoque,
             produto.precoVenda,
             parseFloat(precoCusto.toFixed(2)),
@@ -352,21 +353,11 @@ class SQLiteBackupService {
       });
     }
 
-    // Análise de preço
-    if (historico.length > 1) {
-      const precoAtual = parseFloat(produto.precoVenda) || 0;
-      const precoMedioVendas = parseFloat(historico[0].precoMedio) || precoAtual;
-      const variacaoPreco = precoMedioVendas > 0 ? ((precoAtual - precoMedioVendas) / precoMedioVendas * 100) : 0;
-
-      if (Math.abs(variacaoPreco) > 10) {
-        recomendacoes.push({
-          tipo: 'info',
-          icone: '💰',
-          titulo: 'Variação de Preço Detectada',
-          mensagem: `Preço ${variacaoPreco > 0 ? 'aumentou' : 'diminuiu'} ${Math.abs(variacaoPreco).toFixed(1)}% recentemente.`
-        });
-      }
-    }
+    // Análise de preço - REMOVIDA
+    // Motivo: Comparação não é confiável quando temos múltiplos tipos de preço
+    // (revenda, atacado, varejo, estoque). O sistema sempre usa valor de revenda
+    // como prioridade, mas as vendas históricas podem ter sido feitas com outros preços.
+    // Isso causava alertas falsos de "variação de preço" quando na verdade não houve mudança.
 
     // Cálculo de estoque ideal sugerido
     // 1) Consumo médio recente (últimos até 6 meses com vendas > 0)

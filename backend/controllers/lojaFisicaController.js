@@ -41,6 +41,28 @@ const getLojaFisicaProdutosAbaixoEstoqueIdeal = async (req, res, next) => {
     const offset = (page - 1) * limit;
     const search = (req.query.search || '').toString().trim().toLowerCase();
 
+    // Função para categorizar automaticamente baseado na descrição
+    const categorizarProduto = (descricao) => {
+      if (!descricao) return 'Outro';
+      
+      const desc = descricao.toLowerCase();
+      
+      if (desc.includes('anel') || desc.includes('aneis') || desc.includes('anéis') || /\ban\b/.test(desc) || /\ban\s/.test(desc) || desc.startsWith('an ')) return 'Anel';
+      if (desc.includes('argola') || desc.includes('argolas')) return 'Argola';
+      if (desc.includes('brinco') || desc.includes('brincos')) return 'Brinco';
+      if (desc.includes('colar') || desc.includes('colares') || desc.includes('corrente') || desc.includes('correntes')) return 'Colar';
+      if (desc.includes('conjunto') || desc.includes('conjuntos')) return 'Conjunto';
+      if (desc.includes('escapulario') || desc.includes('escapulário') || desc.includes('escapularios') || desc.includes('escapulários')) return 'Escapulário';
+      if (desc.includes('gargantilha') || desc.includes('gargantilhas')) return 'Gargantilha';
+      if (desc.includes('piercing') || desc.includes('piercings')) return 'Piercing';
+      if (desc.includes('pingente') || desc.includes('pingentes')) return 'Pingente';
+      if (desc.includes('pulseira') || desc.includes('pulseiras')) return 'Pulseira';
+      if (desc.includes('terco') || desc.includes('terço') || desc.includes('tercos') || desc.includes('terços')) return 'Terço';
+      if (desc.includes('tornozeleira') || desc.includes('tornozeleiras')) return 'Tornozeleira';
+      
+      return 'Outro';
+    };
+
     const stmt = cacheDb.prepare('SELECT * FROM produtos');
     const produtos = stmt.all();
     
@@ -100,7 +122,7 @@ const getLojaFisicaProdutosAbaixoEstoqueIdeal = async (req, res, next) => {
           estoqueIdealSugerido: ideal,
           quantidadeSugeridaCompra: quantidadeSugerida,
           precoCusto,
-          categoria: p.categoria || null,
+          categoria: p.categoria || categorizarProduto(p.descricao),
           valorTotalSugerido,
           nivelAlerta,
           riscoRuptura,
@@ -148,11 +170,13 @@ const getLojaFisicaProdutosAbaixoEstoqueIdeal = async (req, res, next) => {
 // GET /api/produtos/loja-fisica
 const getLojaFisicaProdutos = async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 100;
+  const limit = parseInt(req.query.limit) || 50;
   const offset = (page - 1) * limit;
-  const search = req.query.search || '';
+  const search = (req.query.search || '').toString().trim().toLowerCase();
+  const fornecedor = (req.query.fornecedor || '').toString().trim();
+  const categoria = (req.query.categoria || '').toString().trim();
 
-  console.log(`[API] Buscando produtos - página ${page}, busca: "${search}"`);
+  console.log(`[API] Buscando produtos - página ${page}, busca: "${search}", fornecedor: "${fornecedor}", categoria: "${categoria}"`);
 
   try {
     // Verificar se SQLite tem dados
@@ -170,67 +194,134 @@ const getLojaFisicaProdutos = async (req, res, next) => {
     let produtos = [];
     let total = 0;
 
+    // Construir WHERE clause dinamicamente
+    const whereConditions = [];
+    const params = [];
+
     if (search) {
-      // Busca com LIKE
       const searchQuery = `%${search}%`;
-      const countStmt = cacheDb.prepare(`
-        SELECT COUNT(*) as total FROM produtos
-        WHERE codigo_interno LIKE ? 
-           OR codigo_barras LIKE ? 
-           OR descricao LIKE ?
-      `);
-      total = countStmt.get(searchQuery, searchQuery, searchQuery).total;
-
-      const stmt = cacheDb.prepare(`
-        SELECT * FROM produtos
-        WHERE codigo_interno LIKE ? 
-           OR codigo_barras LIKE ? 
-           OR descricao LIKE ?
-        ORDER BY total_vendas DESC
-        LIMIT ? OFFSET ?
-      `);
-      produtos = stmt.all(searchQuery, searchQuery, searchQuery, limit, offset);
-    } else {
-      // Busca sem filtro
-      const countStmt = cacheDb.prepare('SELECT COUNT(*) as total FROM produtos');
-      total = countStmt.get().total;
-
-      const stmt = cacheDb.prepare(`
-        SELECT * FROM produtos
-        ORDER BY total_vendas DESC
-        LIMIT ? OFFSET ?
-      `);
-      produtos = stmt.all(limit, offset);
+      whereConditions.push('(codigo_interno LIKE ? OR codigo_barras LIKE ? OR descricao LIKE ?)');
+      params.push(searchQuery, searchQuery, searchQuery);
     }
 
+    if (fornecedor) {
+      whereConditions.push('fornecedor = ?');
+      params.push(fornecedor);
+    }
+
+    // NÃO filtrar por categoria no SQL - será filtrado após categorização automática
+
+    const whereClause = whereConditions.length > 0 
+      ? `WHERE ${whereConditions.join(' AND ')}` 
+      : '';
+
+    // Buscar TODOS os produtos (sem paginação ainda, pois precisamos categorizar primeiro)
+    const stmt = cacheDb.prepare(`
+      SELECT * FROM produtos
+      ${whereClause}
+      ORDER BY total_vendas DESC
+    `);
+    produtos = stmt.all(...params);
+
+    // Função para categorizar automaticamente baseado na descrição
+    const categorizarProduto = (descricao) => {
+      if (!descricao) return 'Outro';
+      
+      const desc = descricao.toLowerCase();
+      
+      // Verificar palavras-chave para cada categoria (ordem alfabética)
+      // Anel: detecta palavra completa ou abreviação "AN" como palavra separada
+      if (desc.includes('anel') || desc.includes('aneis') || desc.includes('anéis') || 
+          /\ban\b/.test(desc) || /\ban\s/.test(desc) || desc.startsWith('an ')) {
+        return 'Anel';
+      }
+      if (desc.includes('argola') || desc.includes('argolas')) {
+        return 'Argola';
+      }
+      if (desc.includes('brinco') || desc.includes('brincos')) {
+        return 'Brinco';
+      }
+      if (desc.includes('colar') || desc.includes('colares') || desc.includes('corrente') || desc.includes('correntes')) {
+        return 'Colar';
+      }
+      if (desc.includes('conjunto') || desc.includes('conjuntos')) {
+        return 'Conjunto';
+      }
+      if (desc.includes('escapulario') || desc.includes('escapulário') || desc.includes('escapularios') || desc.includes('escapulários')) {
+        return 'Escapulário';
+      }
+      if (desc.includes('gargantilha') || desc.includes('gargantilhas')) {
+        return 'Gargantilha';
+      }
+      if (desc.includes('piercing') || desc.includes('piercings')) {
+        return 'Piercing';
+      }
+      if (desc.includes('pingente') || desc.includes('pingentes')) {
+        return 'Pingente';
+      }
+      if (desc.includes('pulseira') || desc.includes('pulseiras')) {
+        return 'Pulseira';
+      }
+      if (desc.includes('terco') || desc.includes('terço') || desc.includes('tercos') || desc.includes('terços')) {
+        return 'Terço';
+      }
+      if (desc.includes('tornozeleira') || desc.includes('tornozeleiras')) {
+        return 'Tornozeleira';
+      }
+      
+      return 'Outro';
+    };
+
+    // Formatar e categorizar TODOS os produtos primeiro
+    let produtosFormatados = produtos.map(p => {
+      const categoriaFinal = p.categoria || categorizarProduto(p.descricao);
+      const precoVenda = parseFloat(p.preco_venda || 0);
+      const precoCusto = parseFloat(p.preco_custo || 0);
+      const estoque = p.estoque || 0;
+      
+      // Calcular lucro por unidade (margem de lucro)
+      const lucro = precoVenda - precoCusto;
+      
+      return {
+        codigoInterno: p.codigo_interno,
+        codigoBarras: p.codigo_barras,
+        descricao: p.descricao,
+        descricaoResumida: p.descricao_resumida,
+        codigoFornecedor: p.codigo_fornecedor,
+        categoria: categoriaFinal,
+        estoque: estoque,
+        precoVenda: precoVenda,
+        precoCusto: precoCusto,
+        margem: parseFloat(p.margem || 0),
+        lucro: lucro,
+        tipoPreco: p.tipo_preco || 'estoque',
+        fornecedor: p.fornecedor,
+        imagemBase64: p.imagem_base64,
+        estoqueMinimo: p.estoque_minimo,
+        mediaMensal: parseFloat(p.media_mensal || 0),
+        totalVendas: p.total_vendas,
+        vendasMensais: p.vendas_mensais ? JSON.parse(p.vendas_mensais) : []
+      };
+    });
+
+    // Filtrar por categoria APÓS a categorização automática
+    if (categoria) {
+      produtosFormatados = produtosFormatados.filter(p => p.categoria === categoria);
+      console.log(`[Filtro Categoria] "${categoria}" -> ${produtosFormatados.length} produtos encontrados`);
+    }
+
+    // Calcular total e páginas APÓS o filtro de categoria
+    total = produtosFormatados.length;
     const totalPages = Math.ceil(total / limit);
 
-    // Formatar resposta
-    const produtosFormatados = produtos.map(p => ({
-      codigoInterno: p.codigo_interno,
-      codigoBarras: p.codigo_barras,
-      descricao: p.descricao,
-      descricaoResumida: p.descricao_resumida,
-      codigoFornecedor: p.codigo_fornecedor,
-      estoque: p.estoque,
-      precoVenda: parseFloat(p.preco_venda || 0),
-      precoCusto: parseFloat(p.preco_custo || 0),
-      margem: parseFloat(p.margem || 0),
-      tipoPreco: p.tipo_preco || 'estoque',
-      fornecedor: p.fornecedor,
-      imagemBase64: p.imagem_base64,
-      estoqueMinimo: p.estoque_minimo,
-      mesPico: p.mes_pico,
-      mediaMensal: parseFloat(p.media_mensal || 0),
-      totalVendas: p.total_vendas,
-      vendasMensais: p.vendas_mensais ? JSON.parse(p.vendas_mensais) : []
-    }));
+    // Aplicar paginação APÓS o filtro
+    const produtosPaginados = produtosFormatados.slice(offset, offset + limit);
 
-    console.log(`[SQLite] ✅ ${produtos.length} produtos retornados (${total} total)`);
+    console.log(`[SQLite] ✅ ${produtosPaginados.length} produtos retornados (${total} total, página ${page}/${totalPages})`);
 
     return res.json({
       success: true,
-      data: produtosFormatados,
+      data: produtosPaginados,
       pagination: {
         page,
         limit,
@@ -615,6 +706,28 @@ const getLojaFisicaProdutosPicosQueda = async (req, res, next) => {
     const thresholdRatio = thresholdPercent / 100;
     const search = (req.query.search || '').toString().trim().toLowerCase();
 
+    // Função para categorizar automaticamente baseado na descrição
+    const categorizarProduto = (descricao) => {
+      if (!descricao) return 'Outro';
+      
+      const desc = descricao.toLowerCase();
+      
+      if (desc.includes('anel') || desc.includes('aneis') || desc.includes('anéis') || /\ban\b/.test(desc) || /\ban\s/.test(desc) || desc.startsWith('an ')) return 'Anel';
+      if (desc.includes('argola') || desc.includes('argolas')) return 'Argola';
+      if (desc.includes('brinco') || desc.includes('brincos')) return 'Brinco';
+      if (desc.includes('colar') || desc.includes('colares') || desc.includes('corrente') || desc.includes('correntes')) return 'Colar';
+      if (desc.includes('conjunto') || desc.includes('conjuntos')) return 'Conjunto';
+      if (desc.includes('escapulario') || desc.includes('escapulário') || desc.includes('escapularios') || desc.includes('escapulários')) return 'Escapulário';
+      if (desc.includes('gargantilha') || desc.includes('gargantilhas')) return 'Gargantilha';
+      if (desc.includes('piercing') || desc.includes('piercings')) return 'Piercing';
+      if (desc.includes('pingente') || desc.includes('pingentes')) return 'Pingente';
+      if (desc.includes('pulseira') || desc.includes('pulseiras')) return 'Pulseira';
+      if (desc.includes('terco') || desc.includes('terço') || desc.includes('tercos') || desc.includes('terços')) return 'Terço';
+      if (desc.includes('tornozeleira') || desc.includes('tornozeleiras')) return 'Tornozeleira';
+      
+      return 'Outro';
+    };
+
     const stmt = cacheDb.prepare('SELECT * FROM produtos');
     const produtos = stmt.all();
     const resultados = [];
@@ -837,6 +950,7 @@ const getLojaFisicaProdutosPicosQueda = async (req, res, next) => {
       resultados.push({
         codigoInterno: produto.codigo_interno,
         descricao: produto.descricao,
+        categoria: produto.categoria || categorizarProduto(produto.descricao),
         imagemBase64: produto.imagem_base64 || null,
         estoqueAtual,
         precoAtual: precoVendaAtual,
@@ -998,9 +1112,227 @@ const getLojaFisicaProdutoByCodigo = async (req, res, next) => {
   }
 };
 
+/**
+ * Buscar métricas gerais da loja física
+ */
+const getLojaFisicaMetrics = async (req, res) => {
+  try {
+    console.log('[Loja Física] 📊 Buscando métricas...');
+
+    // Buscar todos os produtos para calcular métricas
+    const stmt = cacheDb.prepare(`
+      SELECT 
+        codigo_interno,
+        preco_venda,
+        preco_custo,
+        estoque,
+        total_vendas,
+        data_atualizacao
+      FROM produtos
+    `);
+    const produtos = stmt.all();
+
+    // 1. Capital Investido (Estoque × Preço Custo)
+    const capitalInvestido = produtos.reduce((sum, p) => {
+      return sum + (p.estoque * parseFloat(p.preco_custo || 0));
+    }, 0);
+
+    // 2. Produtos com Margem Negativa
+    const produtosMargemNegativa = produtos.filter(p => {
+      const precoVenda = parseFloat(p.preco_venda || 0);
+      const precoCusto = parseFloat(p.preco_custo || 0);
+      return precoVenda < precoCusto && precoVenda > 0;
+    });
+
+    const prejuizoPotencial = produtosMargemNegativa.reduce((sum, p) => {
+      const lucro = (parseFloat(p.preco_venda) - parseFloat(p.preco_custo)) * p.estoque;
+      return sum + Math.abs(lucro);
+    }, 0);
+
+    // 3. Produtos Parados (sem vendas nos últimos 6 meses)
+    // Considera produtos com total_vendas = 0 ou muito baixo
+    const produtosParados = produtos.filter(p => {
+      const totalVendas = p.total_vendas || 0;
+      return totalVendas === 0;
+    });
+
+    const valorParado = produtosParados.reduce((sum, p) => {
+      return sum + (p.estoque * parseFloat(p.preco_custo || 0));
+    }, 0);
+
+    // 4. Top 20 Mais Lucrativos
+    const produtosComLucro = produtos
+      .map(p => ({
+        ...p,
+        lucroTotal: (parseFloat(p.preco_venda || 0) - parseFloat(p.preco_custo || 0)) * p.estoque
+      }))
+      .sort((a, b) => b.lucroTotal - a.lucroTotal);
+
+    const top20 = produtosComLucro.slice(0, 20);
+    const lucroTop20 = top20.reduce((sum, p) => sum + p.lucroTotal, 0);
+    const lucroTotal = produtosComLucro.reduce((sum, p) => sum + Math.max(0, p.lucroTotal), 0);
+    const percentualTop20 = lucroTotal > 0 ? ((lucroTop20 / lucroTotal) * 100).toFixed(1) : 0;
+
+    const metrics = {
+      capitalInvestido: Math.round(capitalInvestido),
+      totalProdutos: produtos.length,
+      produtosMargemNegativa: produtosMargemNegativa.length,
+      prejuizoPotencial: Math.round(prejuizoPotencial),
+      produtosParados: produtosParados.length,
+      valorParado: Math.round(valorParado),
+      percentualTop20: parseFloat(percentualTop20)
+    };
+
+    console.log(`[Métricas] ✅ Calculadas:`);
+    console.log(`  - Total Produtos: ${produtos.length}`);
+    console.log(`  - Capital Investido: R$ ${capitalInvestido.toFixed(2)}`);
+    console.log(`  - Margem Negativa: ${produtosMargemNegativa.length} produtos`);
+    console.log(`  - Produtos Parados: ${produtosParados.length} produtos`);
+    console.log(`  - Top 20: ${percentualTop20}%`);
+
+    return res.json({
+      success: true,
+      data: metrics
+    });
+
+  } catch (error) {
+    console.error('[Loja Física] ❌ Erro ao buscar métricas:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar métricas',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Buscar detalhes das métricas (produtos específicos)
+ */
+const getLojaFisicaMetricsDetails = async (req, res) => {
+  try {
+    const { type } = req.params;
+    console.log(`[Loja Física] 📋 Buscando detalhes: ${type}`);
+
+    // Buscar todos os produtos
+    const stmt = cacheDb.prepare(`
+      SELECT 
+        codigo_interno as codigo,
+        descricao,
+        preco_venda as precoVenda,
+        preco_custo as precoCusto,
+        estoque,
+        total_vendas
+      FROM produtos
+    `);
+    const produtos = stmt.all();
+
+    let result = [];
+
+    switch (type) {
+      case 'margem-negativa':
+        result = produtos
+          .filter(p => {
+            const precoVenda = parseFloat(p.precoVenda || 0);
+            const precoCusto = parseFloat(p.precoCusto || 0);
+            return precoVenda < precoCusto && precoVenda > 0;
+          })
+          .map(p => ({
+            ...p,
+            prejuizo: Math.abs((parseFloat(p.precoVenda) - parseFloat(p.precoCusto)) * p.estoque)
+          }))
+          .sort((a, b) => b.prejuizo - a.prejuizo);
+        break;
+
+      case 'produtos-parados':
+        result = produtos
+          .filter(p => (p.total_vendas || 0) === 0)
+          .map(p => ({
+            ...p,
+            valorParado: p.estoque * parseFloat(p.precoCusto || 0)
+          }))
+          .sort((a, b) => b.valorParado - a.valorParado)
+          .slice(0, 100); // Limitar a 100 produtos
+        break;
+
+      case 'top-lucrativos':
+        result = produtos
+          .map(p => ({
+            ...p,
+            lucroTotal: (parseFloat(p.precoVenda || 0) - parseFloat(p.precoCusto || 0)) * p.estoque
+          }))
+          .filter(p => p.lucroTotal > 0)
+          .sort((a, b) => b.lucroTotal - a.lucroTotal)
+          .slice(0, 20);
+        break;
+
+      default:
+        return res.status(400).json({
+          success: false,
+          message: 'Tipo de métrica inválido'
+        });
+    }
+
+    console.log(`[Métricas Detalhes] ✅ ${result.length} produtos retornados`);
+
+    return res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('[Loja Física] ❌ Erro ao buscar detalhes das métricas:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar detalhes das métricas',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Buscar imagem do produto
+ */
+const getLojaFisicaProdutoImagem = async (req, res) => {
+  try {
+    const { codigo } = req.params;
+    
+    // Buscar produto do cache
+    const stmt = cacheDb.prepare('SELECT imagem_base64 FROM produtos WHERE codigo_interno = ?');
+    const produto = stmt.get(codigo);
+
+    if (!produto || !produto.imagem_base64) {
+      // Retornar imagem placeholder
+      return res.status(404).json({
+        success: false,
+        message: 'Imagem não encontrada'
+      });
+    }
+
+    // Converter base64 para buffer
+    const imageBuffer = Buffer.from(produto.imagem_base64, 'base64');
+    
+    // Definir headers
+    res.set('Content-Type', 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=86400'); // Cache de 1 dia
+    
+    return res.send(imageBuffer);
+
+  } catch (error) {
+    console.error('[Loja Física] ❌ Erro ao buscar imagem:', error.message);
+    return res.status(500).json({
+      success: false,
+      message: 'Erro ao buscar imagem',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getLojaFisicaProdutos,
   getLojaFisicaProdutoByCodigo,
+  getLojaFisicaProdutosAbaixoEstoqueIdeal,
   getLojaFisicaProdutosPicosQueda,
-  getLojaFisicaProdutosAbaixoEstoqueIdeal
+  getLojaFisicaMetrics,
+  getLojaFisicaMetricsDetails,
+  getLojaFisicaProdutoImagem
 };

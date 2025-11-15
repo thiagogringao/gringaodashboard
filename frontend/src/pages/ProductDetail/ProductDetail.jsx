@@ -333,6 +333,25 @@ const ProductDetail = () => {
             {produto.analisePreditiva.recomendacoes && produto.analisePreditiva.recomendacoes.length > 0 && (
               <div className={styles.recomendacoesSection}>
                 <h2 className={styles.sectionTitle}>💡 Recomendações Inteligentes</h2>
+                
+                {/* Card de Valor Total do Estoque */}
+                <div 
+                  className={styles.recomendacaoCard}
+                  style={{ borderLeftColor: '#3498db', marginBottom: '16px' }}
+                >
+                  <div className={styles.recIcone}>💰</div>
+                  <div className={styles.recConteudo}>
+                    <h4 className={styles.recTitulo}>Valor Total do Estoque</h4>
+                    <p className={styles.recMensagem}>
+                      Você possui <strong>{produto.estoque} unidades</strong> em estoque, 
+                      com valor total de <strong>{formatarMoeda(produto.estoque * produto.precoCusto)}</strong> em custo.
+                      {produto.precoVenda && (
+                        <> Valor potencial de venda: <strong>{formatarMoeda(produto.estoque * (isEcommerce ? produto.preco : produto.precoVenda))}</strong>.</>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
                 <div className={styles.recomendacoes}>
                   {produto.analisePreditiva.recomendacoes.map((rec, idx) => (
                     <div 

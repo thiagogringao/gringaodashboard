@@ -42,6 +42,7 @@ function getCacheEcommerceDatabase() {
       situacao TEXT,
       formato TEXT,
       imagem_url TEXT,
+      categoria TEXT,
       
       -- Análise de vendas
       estoque_minimo INTEGER DEFAULT 0,
@@ -68,6 +69,7 @@ function getCacheEcommerceDatabase() {
     CREATE INDEX IF NOT EXISTS idx_mes_pico ON produtos(mes_pico_numero);
     CREATE INDEX IF NOT EXISTS idx_risco_ruptura ON produtos(risco_ruptura);
     CREATE INDEX IF NOT EXISTS idx_dias_estoque ON produtos(dias_estoque);
+    CREATE INDEX IF NOT EXISTS idx_categoria ON produtos(categoria);
 
     -- Tabela de metadados do backup
     CREATE TABLE IF NOT EXISTS backup_metadata (

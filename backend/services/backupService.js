@@ -54,6 +54,53 @@ class BackupService {
   }
 
   /**
+   * Verificar se precisa executar backup
+   * Retorna true se:
+   * - Cache SQLite não existe
+   * - Cache está vazio
+   * - Última sincronização foi há mais de 6 horas
+   */
+  async needsBackup() {
+    try {
+      const cacheDb = require('../config/cacheDatabase');
+      const cacheEcommerceDb = require('../config/cacheEcommerceDatabase');
+      
+      // Verificar se os bancos SQLite têm dados
+      const lojaFisicaCount = cacheDb.prepare('SELECT COUNT(*) as count FROM produtos').get();
+      const ecommerceCount = cacheEcommerceDb.prepare('SELECT COUNT(*) as count FROM produtos').get();
+      
+      // Se algum cache está vazio, precisa backup
+      if (lojaFisicaCount.count === 0 || ecommerceCount.count === 0) {
+        console.log('📊 Cache SQLite vazio, backup necessário');
+        return true;
+      }
+      
+      // Verificar última sincronização
+      const lastSync = await this.getLastSync();
+      const lastSyncDate = new Date(Math.min(
+        new Date(lastSync.ecommerce).getTime(),
+        new Date(lastSync.lojaFisica).getTime()
+      ));
+      
+      const hoursSinceLastSync = (Date.now() - lastSyncDate.getTime()) / (1000 * 60 * 60);
+      
+      // Se última sincronização foi há mais de 6 horas, precisa backup
+      if (hoursSinceLastSync > 6) {
+        console.log(`📊 Última sincronização há ${hoursSinceLastSync.toFixed(1)}h, backup necessário`);
+        return true;
+      }
+      
+      console.log(`📊 Cache atualizado (última sync: ${hoursSinceLastSync.toFixed(1)}h atrás)`);
+      return false;
+      
+    } catch (error) {
+      // Se houver erro ao verificar, executar backup por segurança
+      console.log('⚠️ Erro ao verificar cache, executando backup por segurança');
+      return true;
+    }
+  }
+
+  /**
    * Fazer backup incremental de produtos do e-commerce
    */
   async backupEcommerceProducts() {

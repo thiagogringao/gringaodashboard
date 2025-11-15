@@ -4,24 +4,34 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchLojaFisicaProdutos } from '../../services/api';
 import ProductTable from '../../components/ProductTable/ProductTable';
 import SearchBar from '../../components/SearchBar/SearchBar';
+import Filtros from '../../components/Filtros/Filtros';
 import Pagination from '../../components/Pagination/Pagination';
 import Loading from '../../components/Loading/Loading';
 import EmptyState from '../../components/EmptyState/EmptyState';
+import MetricsCards from '../../components/MetricsCards/MetricsCards';
 import styles from './LojaFisicaCatalog.module.css';
 
 const LojaFisicaCatalog = () => {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
+  const [fornecedor, setFornecedor] = useState('');
+  const [categoria, setCategoria] = useState('');
   const [sortConfig, setSortConfig] = useState({ field: 'totalVendas', direction: 'desc' });
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ['loja-fisica-produtos', page, search],
-    queryFn: () => fetchLojaFisicaProdutos({ page, search })
+    queryKey: ['loja-fisica-produtos', page, search, fornecedor, categoria],
+    queryFn: () => fetchLojaFisicaProdutos({ page, search, fornecedor, categoria })
   });
 
   const handleSearch = useCallback((searchTerm) => {
     setSearch(searchTerm);
+    setPage(1);
+  }, []);
+
+  const handleFilterChange = useCallback(({ fornecedor: newFornecedor, categoria: newCategoria }) => {
+    setFornecedor(newFornecedor);
+    setCategoria(newCategoria);
     setPage(1);
   }, []);
 
@@ -76,7 +86,15 @@ const LojaFisicaCatalog = () => {
       </header>
 
       <div className={styles.content}>
+        <MetricsCards />
+        
         <SearchBar onSearch={handleSearch} placeholder="Buscar produtos..." />
+        
+        <Filtros 
+          onFilterChange={handleFilterChange}
+          initialFornecedor={fornecedor}
+          initialCategoria={categoria}
+        />
 
         {isLoading && <Loading />}
 

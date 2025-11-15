@@ -15,7 +15,7 @@ class SQLiteEcommerceBackupService {
     const startTime = Date.now();
 
     try {
-      // 1. Buscar todos os produtos COM IMAGENS da view vw_dprodutos
+      // 1. Buscar todos os produtos COM IMAGENS e CATEGORIA
       console.log('📦 Buscando produtos do e-commerce...');
       const [produtos] = await poolEcommerce.query(`
         SELECT
@@ -27,9 +27,11 @@ class SQLiteEcommerceBackupService {
           p.tipo,
           p.situacao,
           p.formato,
-          COALESCE(v.imagem, p.imagemURL, '') as imagemURL
+          COALESCE(vp.imagem, p.imagemURL, '') as imagemURL,
+          d.categoria as categoria
         FROM bling2_produtos p
-        LEFT JOIN vw_dprodutos v ON p.codigo = v.sku
+        LEFT JOIN vw_produtos vp ON p.codigo = vp.codigo
+        LEFT JOIN bling_produtos_detalhes d ON p.codigo = d.codigo
         WHERE p.situacao = 'A'
         ORDER BY p.codigo
       `);
@@ -69,12 +71,12 @@ class SQLiteEcommerceBackupService {
       
       const insertStmt = cacheDb.prepare(`
         INSERT OR REPLACE INTO produtos (
-          codigo, nome, preco, preco_custo, estoque, tipo, situacao, formato, imagem_url,
+          codigo, nome, preco, preco_custo, estoque, tipo, situacao, formato, imagem_url, categoria,
           estoque_minimo, mes_pico, media_mensal, total_vendas, vendas_mensais,
           historico_12_meses, analise_preditiva, mes_pico_numero,
           tendencia_percentual, previsao_proximo_mes, risco_ruptura, dias_estoque,
           data_atualizacao
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       `);
 
       // Usar transação para inserir tudo de uma vez (muito mais rápido)
@@ -95,6 +97,7 @@ class SQLiteEcommerceBackupService {
             produto.situacao,
             produto.formato,
             produto.imagemURL,
+            produto.categoria || null,
             analise.estoqueMinimo,
             analise.mesPico,
             analise.mediaMensal,

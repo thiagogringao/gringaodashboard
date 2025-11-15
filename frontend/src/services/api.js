@@ -63,7 +63,7 @@ export const fetchEcommerceProdutos = async ({ page = 1, search = '', limit = 10
   }
 };
 
-export const fetchLojaFisicaProdutos = async ({ page = 1, search = '', limit = 100 }) => {
+export const fetchLojaFisicaProdutos = async ({ page = 1, search = '', fornecedor = '', categoria = '', limit = 100 }) => {
   const params = new URLSearchParams({
     page: page.toString(),
     limit: limit.toString()
@@ -71,6 +71,14 @@ export const fetchLojaFisicaProdutos = async ({ page = 1, search = '', limit = 1
 
   if (search) {
     params.append('search', search);
+  }
+
+  if (fornecedor) {
+    params.append('fornecedor', fornecedor);
+  }
+
+  if (categoria) {
+    params.append('categoria', categoria);
   }
 
   try {
@@ -111,6 +119,50 @@ export const fetchLojaFisicaAbaixoEstoqueIdeal = async ({ page = 1, limit = 100,
 
   const response = await api.get(`/api/produtos/loja-fisica/abaixo-estoque-ideal?${params.toString()}`);
   return response.data;
+};
+
+// Buscar lista de fornecedores
+export const fetchFornecedores = async () => {
+  try {
+    const response = await api.get('/api/filtros/fornecedores');
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao buscar fornecedores:', error);
+    throw error;
+  }
+};
+
+// Buscar lista de categorias
+export const fetchCategorias = async () => {
+  try {
+    const response = await api.get('/api/filtros/categorias');
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao buscar categorias:', error);
+    throw error;
+  }
+};
+
+// Buscar métricas da loja física
+export const fetchLojaFisicaMetrics = async () => {
+  try {
+    const response = await api.get('/api/produtos/loja-fisica/metrics');
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao buscar métricas:', error);
+    throw error;
+  }
+};
+
+// Buscar detalhes das métricas (produtos específicos)
+export const fetchLojaFisicaMetricsDetails = async (type) => {
+  try {
+    const response = await api.get(`/api/produtos/loja-fisica/metrics/${type}`);
+    return response.data;
+  } catch (error) {
+    console.error('Erro ao buscar detalhes das métricas:', error);
+    throw error;
+  }
 };
 
 export default api;

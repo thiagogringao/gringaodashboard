@@ -7,6 +7,7 @@ import SearchBar from '../../components/SearchBar/SearchBar';
 import Pagination from '../../components/Pagination/Pagination';
 import Loading from '../../components/Loading/Loading';
 import EmptyState from '../../components/EmptyState/EmptyState';
+import MetricsCards from '../../components/MetricsCards/MetricsCards';
 import styles from './EcommerceCatalog.module.css';
 
 const EcommerceCatalog = () => {
@@ -76,6 +77,8 @@ const EcommerceCatalog = () => {
       </header>
 
       <div className={styles.content}>
+        <MetricsCards tipo="ecommerce" />
+        
         <SearchBar onSearch={handleSearch} placeholder="Buscar produtos..." />
 
         {isLoading && <Loading />}
