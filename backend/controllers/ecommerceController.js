@@ -47,6 +47,9 @@ const getEcommerceProdutos = async (req, res, next) => {
       const preco = parseFloat(p.preco) || 0;
       const precoCusto = parseFloat(p.preco_custo) || 0;
 
+      console.log(`[LUCRO DEBUG] Produto: ${p.codigo}, Preco Bruto: '${p.preco}', Preco Custo Bruto: '${p.preco_custo}'`); // LOG DE DEPURAÇÃO
+
+
       return {
         id: p.codigo,
         codigo: p.codigo,
@@ -58,6 +61,7 @@ const getEcommerceProdutos = async (req, res, next) => {
         situacao: p.situacao,
         categoria: p.categoria || null,
         margem: calcularMargem(preco, precoCusto),
+        lucro: preco - precoCusto,
         
         // Análise de vendas (igual loja física)
         estoqueMinimo: p.estoque_minimo,
