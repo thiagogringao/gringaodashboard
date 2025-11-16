@@ -10,7 +10,7 @@ NGINX_CONF="server {
 
     # Servir o frontend
     location / {
-        root /var/www/dashboard/frontend;
+        root /var/www/dashboard/frontend/dist;
         try_files \$uri \$uri/ /index.html;
     }
 
